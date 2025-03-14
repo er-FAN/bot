@@ -1,27 +1,36 @@
-﻿from telegram import Update
+﻿import logging
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
-# توکن بات را اینجا قرار بده
-TOKEN = "YOUR_BOT_TOKEN"
+# فعال کردن لاگ‌ها برای دیباگ
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-# پاسخ به دستور /start
+TOKEN = "7652f002534:AAFaGS0gxvVp8woQj4sfgdfsT3zKZ7-pz28"
+
 async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("سلام! من یک بات تلگرامی هستم. با من صحبت کن.")
+    """ارسال پیام شروع"""
+    await update.message.reply_text("سلام! من یک بات تلگرامی هستم.")
 
-# پاسخ به پیام‌های متنی
+async def end(update: Update, context: CallbackContext) -> None:
+    """ارسال پیام شروع"""
+    await update.message.reply_text("خداحافظ.")
+
 async def echo(update: Update, context: CallbackContext) -> None:
-    text = update.message.text
-    await update.message.reply_text(f"تو گفتی: {text}")
+    """پیام‌های ورودی را ارسال کن"""
+    await update.message.reply_text(f"تو گفتی: {update.message.text}")
 
-# تابع اصلی برای اجرای بات
 def main():
+    # ساخت ربات
     app = Application.builder().token(TOKEN).build()
 
-    # اضافه کردن دستورات و فیلترها
+    # اضافه کردن هندلرهای دستورات
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("end", end))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-    # راه‌اندازی بات
+    # شروع به دریافت پیام‌ها
     app.run_polling()
 
 if __name__ == '__main__':
