@@ -84,20 +84,7 @@ async def add_product(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(response)
 
 
-async def show_products(update: Update, context: CallbackContext) -> None:
-    """نمایش لیست محصولات با دکمه افزودن به سبد خرید"""
-    message, products = product_service.get_all_products()
-    
-    if message:
-        await update.message.reply_text(message)
-        return
 
-    for product in products:
-        product_text = f"🛍 {product['name']}\n💰 قیمت: {product['price']} تومان\nℹ️ {product['description']}"
-        keyboard = [[InlineKeyboardButton("➕ افزودن به سبد خرید", callback_data=f"add_{product['_id']}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await update.message.reply_text(product_text, reply_markup=reply_markup)
 
 
 async def add_to_cart_callback(update: Update, context: CallbackContext) -> None:
