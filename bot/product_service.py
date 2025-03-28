@@ -1,55 +1,48 @@
-﻿# from repository import GenericRepository
-
-# class ProductService:
-#     def __init__(self):
-#         self.product_repo = GenericRepository("products")
-
-#     def add_product(self, name: str, price: int, description: str):
-#         """افزودن محصول جدید به دیتابیس"""
-#         product_data = {
-#             "name": name,
-#             "price": price,
-#             "description": description
-#         }
-#         self.product_repo.insert(product_data)
-#         return f"✅ محصول '{name}' اضافه شد."
-
-#     def get_all_products(self):
-#         """دریافت لیست محصولات"""
-#         products = self.product_repo.get_all()
-#         if not products:
-#             return "هیچ محصولی یافت نشد!", None
-
-#         product_list = []
-#         for product in products:
-#             product["_id"] = str(product["_id"])  # تبدیل ObjectId به str
-#             product_list.append(product)
-        
-#         return None, product_list
-
+﻿from tkinter import SEL
+from telegram import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
+from telegram.ext import ConversationHandler, CommandHandler, MessageHandler, filters
 from repository import GenericRepository
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from bson import ObjectId
 
-class ProductService:
-    def __init__(self, user_service):
-        self.product_repo = GenericRepository("products")
-        self.user_service = user_service
+# مراحل مختلف مکالمه
+(
+    NAME,
+    PRICE,
+    CATEGORY,
+    DESCRIPTION,
+    ATTRIBUTE_NAME,
+    ATTRIBUTE_TYPE,
+    ATTRIBUTE_VALUE,
+    CONFIRM_PRODUCT,
+) = range(8)
 
-    def add_product(self, name: str, price: int, description: str = "توضیحی موجود نیست"):
+
+class ProductService:
+    def __init__(self):
+        self.product_repo = GenericRepository("products")
+        # self.user_service = user_service
+
+    def add_product(self, new_product):
         # """افزودن محصول جدید (فقط برای ادمین‌ها)"""
         # user = update.effective_user
         # if not user_service.is_admin(user.id):
         #     await update.message.reply_text("⛔ شما اجازه افزودن محصول را ندارید!")
         #     return
 
-        product_data = {
-            "name": name,
-            "price": price,
-            "description": description
-        }
-        self.product_repo.insert(product_data)
-        return f"✅ محصول '{name}' اضافه شد."
+        # product_data = {
+        # "name": name,
+        # "price": price,
+        # "category": category,  # دسته‌بندی محصول
+        # "description": description,
+        # "attributes": attributes
+        # }
+        self.product_repo.insert(new_product)
+        return f"✅ محصول '{new_product['name']}' در دسته '{new_product['category']}' اضافه شد."
 
     def get_all_products(self):
         """دریافت لیست محصولات"""
@@ -64,66 +57,140 @@ class ProductService:
 
         return None, product_list
 
-    async def show_products(self, update, context):
-        """نمایش لیست محصولات با دکمه 'افزودن به سبد خرید'"""
-        message, products = self.get_all_products()
-        
-        if message:
-            await update.message.reply_text(message)
+    async def show_products(self, update, context, products=None):
+        """دریافت و نمایش لیست محصولات"""
+        print("✅ متد show_products فراخوانی شد")  
+
+        if products is None:
+            products = list(self.product_repo.get_all())  # دریافت لیست محصولات
+
+        if not products:
+            if update.callback_query:  # اگر از طریق دکمه فراخوانی شده است
+                await update.callback_query.message.reply_text("⚠️ هیچ محصولی یافت نشد!")
+            else:  # اگر از طریق پیام متنی (`/show_products`) فراخوانی شده است
+                await update.message.reply_text("⚠️ هیچ محصولی یافت نشد!")
             return
 
         for product in products:
-            product_text = f"🛍 {product['name']}\n💰 قیمت: {product['price']} تومان\nℹ️ {product['description']}"
-            keyboard = [[InlineKeyboardButton("➕ افزودن به سبد خرید", callback_data=f"add_{product['_id']}")]]
+            print(f"📦 محصول: {product['name']} - 📸 تصویر: {product.get('image_url', '❌ بدون تصویر')}")  
+
+            text = f"🛍 {product['name']}\n💰 قیمت: {product['price']} تومان\nℹ️ {product.get('description', '')}"
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("➕ افزودن به سبد خرید", callback_data=f"add_{product['_id']}"),
+                    InlineKeyboardButton("🔍 مشاهده اطلاعات محصول", callback_data=f"info_{product['_id']}")
+                ]
+            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await update.message.reply_text(product_text, reply_markup=reply_markup)
+            # بررسی ارسال از طریق پیام یا دکمه
+            if update.callback_query:
+                sender = update.callback_query.message  # از دکمه
+            else:
+                sender = update.message  # از پیام متنی
 
-    async def add_to_cart(self, update, context):
-        """افزودن محصول به سبد خرید"""
+            if "image_url" in product and product["image_url"]:
+                await sender.reply_photo(photo=product["image_url"], caption=text, reply_markup=reply_markup)
+            else:
+                await sender.reply_text(text, reply_markup=reply_markup)
+
+
+    async def show_product_info(self, update, context):
+        """نمایش اطلاعات کامل محصول"""
         query = update.callback_query
-        user = query.from_user
+        await query.answer()
 
-        product_id = query.data.replace("add_", "")
-        product = self.product_repo.get_by_id(ObjectId(product_id))
+        product_id = query.data.replace("info_", "")  # استخراج ID محصول
+        product = self.product_repo.get_by_id(product_id)  # دریافت اطلاعات محصول
 
-        if product:
-            self.user_service.add_to_cart(user.id, product)
-            await query.answer(f"✅ '{product['name']}' به سبد خرید اضافه شد!", show_alert=True)
-        else:
-            await query.answer("❌ محصول یافت نشد!", show_alert=True)
-
-    async def get_cart(self, update, context):
-        user = update.effective_user
-        cart = self.user_service.get_user_cart(user.id)
-
-        if not cart:
-            await update.message.reply_text("🛒 سبد خرید شما خالی است!")
+        if not product:
+            await query.message.reply_text("❌ محصول موردنظر یافت نشد!")
             return
 
-        for index, product in enumerate(cart):
-            # اگر description موجود نباشد، مقدار پیش‌فرض بده
-            description = product.get('description', "توضیحی موجود نیست")
-            product_text = f"🛍 {product['name']}\n💰 قیمت: {product['price']} تومان\nℹ️ {description}"
-            keyboard = [[InlineKeyboardButton("❌ حذف از سبد", callback_data=f"remove_{index}")]]
+        text = (
+            f"🛍 نام محصول: {product['name']}\n"
+            f"💰 قیمت: {product['price']} تومان\n"
+            f"📂 دسته‌بندی: {product.get('category', 'نامشخص')}\n"
+            f"ℹ توضیحات: {product.get('description', 'ندارد')}\n"
+        )
+
+        if "attributes" in product and product["attributes"]:
+            text += "\n🔹 **ویژگی‌های محصول:**\n"
+            for key, value in product["attributes"].items():
+                text += f"• {key}: {value['value']} ({value['type']})\n"
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "➕ افزودن به سبد خرید", callback_data=f"add_{product_id}"
+                )
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if "image_url" in product and product["image_url"]:
+            await query.message.reply_photo(
+                photo=product["image_url"], caption=text, reply_markup=reply_markup
+            )
+        else:
+            await query.message.reply_text(text, reply_markup=reply_markup)
+
+    async def show_categories(self, update, context):
+        categories = self.product_repo.collection.distinct("category")
+
+        if not categories:
+            await update.message.reply_text("🚫 هیچ دسته‌ای یافت نشد!")
+            return
+
+        buttons = [
+            [InlineKeyboardButton(cat, callback_data=f"category_{cat}")]
+            for cat in categories
+        ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+
+        await update.message.reply_text(
+            "📂 دسته‌بندی محصولات:", reply_markup=reply_markup
+        )
+
+    async def show_products_by_category(self, update, context):
+        query = update.callback_query
+        category = query.data.replace("category_", "")
+
+        products = list(self.product_repo.get_all({"category": category}))
+        await self.show_products(update, context, products)
+
+    async def search_products(self, update, context):
+        if len(context.args) < 1:
+            await update.message.reply_text(
+                "🔎 لطفاً نام محصول را وارد کنید.\nمثال:\n`/search گوشی`"
+            )
+            return
+
+        search_text = " ".join(context.args)
+        products = list(
+            self.product_repo.get_all(
+                {"name": {"$regex": search_text, "$options": "i"}}
+            )
+        )
+
+        if not products:
+            await update.message.reply_text(
+                f"🚫 محصولی با نام '{search_text}' یافت نشد."
+            )
+            return
+
+        for product in products:
+            product_text = f"🛍 {product['name']}\n💰 قیمت: {product['price']} تومان\nℹ️ {product.get('description', '')}"
+
+            # دکمه افزودن به سبد خرید
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "➕ افزودن به سبد خرید", callback_data=f"add_{product['_id']}"
+                    )
+                ]
+            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(product_text, reply_markup=reply_markup)
-
-    async def remove_from_cart(self, update, context):
-        """حذف محصول از سبد خرید"""
-        query = update.callback_query
-        user = query.from_user
-
-        index = int(query.data.replace("remove_", ""))
-        cart = self.user_service.get_user_cart(user.id)
-
-        if cart and 0 <= index < len(cart):
-            removed_item = cart.pop(index)
-            self.user_service.user_repo.update(user.id, {"cart": cart})
-            await query.answer(f"✅ '{removed_item['name']}' از سبد خرید حذف شد.", show_alert=True)
-            await query.message.delete()
-        else:
-            await query.answer("❌ آیتم مورد نظر یافت نشد!", show_alert=True)
-
-

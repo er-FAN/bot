@@ -21,10 +21,15 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="addToCart_Conversation_Service.py" />
+    <Compile Include="add_product_conversation_service.py" />
     <Compile Include="bot.py" />
+    <Compile Include="editProfile_conversation_service.py" />
     <Compile Include="order_service.py" />
     <Compile Include="product_service.py" />
+    <Compile Include="Register_Conversation_Service.py" />
     <Compile Include="repository.py" />
+    <Compile Include="userCart_Service.py" />
     <Compile Include="user_service.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

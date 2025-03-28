@@ -1,7 +1,9 @@
-﻿from pymongo import MongoClient
+﻿from bson import ObjectId
+from pymongo import MongoClient
 from typing import TypeVar, Generic, Dict, Any, List
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class GenericRepository(Generic[T]):
     def __init__(self, collection_name: str):
@@ -16,19 +18,23 @@ class GenericRepository(Generic[T]):
 
     def get_by_id(self, item_id: Any) -> Dict[str, Any] | None:
         """دریافت یک سند با آیدی"""
-        return self.collection.find_one({"_id": item_id})
+        return self.collection.find_one({"_id": ObjectId(item_id)})
 
-    def get_all(self) -> List[Dict[str, Any]]:
-        """دریافت تمام اسناد"""
-        return list(self.collection.find())
+    def get_all(self, filter_dict: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """دریافت تمام اسناد به‌صورت لیست"""
+        if filter_dict is None:
+            filter_dict = {}  # اگر هیچ فیلتری ارسال نشود، همه داده‌ها را برگردان
 
-    def update(self, item_id: Any, updated_item: Dict[str, Any]) -> bool:
-        """بروزرسانی یک سند با آیدی"""
-        result = self.collection.update_one({"_id": item_id}, {"$set": updated_item})
-        return result.modified_count > 0
+        return list(self.collection.find(filter_dict))
+
+    def update(self, entity_id, update_fields):
+        """بروزرسانی یک موجودیت بر اساس `entity_id`"""
+        return self.collection.update_one(
+            {"_id": ObjectId(entity_id)},  # جستجوی موجودیت بر اساس `_id`
+            {"$set": update_fields},  # اعمال تغییرات
+        )
 
     def delete(self, item_id: Any) -> bool:
         """حذف یک سند با آیدی"""
         result = self.collection.delete_one({"_id": item_id})
         return result.deleted_count > 0
-
